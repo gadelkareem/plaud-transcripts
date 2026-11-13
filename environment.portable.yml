@@ -1,0 +1,22 @@
+# Windows / Linux / Intel Mac (and the Docker image): same pipeline with portable engines
+# instead of MLX.
+name: plaud_transcripts
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - ffmpeg
+  - pip
+  - pip:
+      # Local LLM (GGUF models) for titles, summaries and tags. The prebuilt CPU build from
+      # the project's own index: conda-forge's Linux package is too old for current models.
+      - --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu
+      - --only-binary=llama-cpp-python
+      - llama-cpp-python
+      - huggingface-hub
+      # Local Whisper on CPU or an NVIDIA GPU.
+      - faster-whisper
+      # Local speaker labels ("Speaker 1", "Speaker 2") for local transcripts.
+      - sherpa-onnx
+      # MCP server so an AI assistant (any MCP client) can search the library.
+      - mcp

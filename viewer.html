@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Plaud Library</title>
+<style>
+  /* Material Design 3 look. No web fonts: the page must work offline and call nobody. */
+  :root {
+    --bg: #f0f4f9; --panel: #ffffff; --raised: #e9eef6; --ink: #1f1f1f; --muted: #5f6368; --line: #dde3ea;
+    --accent: #0b57d0; --on-accent: #ffffff; --accent-soft: #d3e3fd; --on-soft: #041e49; --hover: rgba(31, 31, 31, .08);
+    --plaud: #146c2e; --whisper: #9a5b00; --none: #b3261e; --mark: #fde293;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 1px 3px 1px rgba(0, 0, 0, .15);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131314; --panel: #1e1f20; --raised: #282a2c; --ink: #e3e3e3; --muted: #9aa0a6; --line: #3c4043;
+      --accent: #a8c7fa; --on-accent: #062e6f; --accent-soft: #0842a0; --on-soft: #d3e3fd; --hover: rgba(227, 227, 227, .08);
+      --plaud: #6dd58c; --whisper: #f5bd5b; --none: #f2b8b5; --mark: #7c5800;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.5 "Google Sans Text", "Google Sans", Roboto, "Segoe UI", system-ui, -apple-system, sans-serif; letter-spacing: .1px; -webkit-font-smoothing: antialiased; }
+  button, select, input { font: inherit; letter-spacing: inherit; }
+  button:focus-visible, select:focus-visible, th:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .app { display: grid; grid-template-columns: 380px 1fr; height: 100vh; }
+  aside { background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
+  .tools { padding: 16px 16px 8px; }
+  .tools h1 { font-size: 22px; font-weight: 400; line-height: 28px; margin: 0 0 14px 8px; }
+  .tools h1 a { color: inherit; text-decoration: none; }
+  .tools input[type=search] { width: 100%; height: 48px; padding: 0 20px; border: 0; border-radius: 24px; background: var(--raised); color: var(--ink); font-size: 16px; outline: none; transition: background .15s, box-shadow .15s; }
+  .tools input[type=search]::placeholder { color: var(--muted); }
+  .tools input[type=search]:focus { background: var(--panel); box-shadow: var(--shadow); }
+  .filters { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .filters button, .chip { height: 32px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 0 12px; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: background .15s; }
+  .filters button:hover, .chip:hover { background: var(--hover); }
+  .filters button.on, .chip.on { background: var(--accent-soft); color: var(--on-soft); border-color: transparent; }
+  .sortrow { display: flex; gap: 8px; margin-top: 12px; }
+  .sortrow select { flex: 1; min-width: 0; height: 40px; border: 1px solid var(--line); background: transparent; color: var(--ink); border-radius: 8px; padding: 0 10px; cursor: pointer; }
+  .sortrow select option { background: var(--panel); color: var(--ink); }
+  .sortrow button, .copybar button { height: 40px; border: 0; background: var(--accent-soft); color: var(--on-soft); border-radius: 20px; padding: 0 18px; font-weight: 500; cursor: pointer; white-space: nowrap; transition: box-shadow .15s; }
+  .sortrow button:hover, .copybar button:hover { box-shadow: var(--shadow); }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; max-height: 148px; overflow-y: auto; }
+  .chip { height: 28px; padding: 0 10px; font-size: 12px; }
+  .chip.clear { color: var(--none); border-color: var(--none); }
+  .chip small { opacity: .7; margin-inline-start: 5px; font-weight: 400; }
+  .count { color: var(--muted); font-size: 12px; margin: 12px 8px 0; font-variant-numeric: tabular-nums; }
+  .list { overflow-y: auto; flex: 1; padding: 0 8px 12px; }
+  .day { position: sticky; top: 0; z-index: 1; background: var(--bg); color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .5px; padding: 12px 16px 6px; }
+  .item { display: block; width: 100%; text-align: start; border: 0; border-radius: 16px; background: transparent; color: inherit; padding: 10px 16px; margin: 1px 0; cursor: pointer; transition: background .15s; }
+  .item:hover { background: var(--hover); }
+  .item.sel { background: var(--accent-soft); color: var(--on-soft); }
+  .item .name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 500; }
+  .item .meta { display: flex; gap: 10px; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+  .item.sel .meta { color: inherit; opacity: .8; }
+  .tag { font-size: 11px; font-weight: 500; letter-spacing: .5px; }
+  .tag.plaud { color: var(--plaud); } .tag.whisper { color: var(--whisper); } .tag.none { color: var(--none); }
+  .item.sel .tag { color: inherit; }
+  main { overflow-y: auto; min-width: 0; background: var(--panel); border-radius: 24px; margin: 12px 12px 12px 4px; }
+  .doc { max-width: 840px; margin: 0 auto; padding: 32px 32px 80px; }
+  .doc.wide { max-width: none; padding: 8px 16px 40px; }
+  .doc h2 { font-size: 28px; font-weight: 400; line-height: 36px; margin: 0 0 8px; text-wrap: balance; }
+  .facts { color: var(--muted); font-size: 13px; display: flex; gap: 6px 16px; flex-wrap: wrap; align-items: center; font-variant-numeric: tabular-nums; }
+  .facts code { font: 11px "Roboto Mono", ui-monospace, Consolas, Menlo, monospace; opacity: .8; overflow-wrap: anywhere; }
+  .doc > .chips { max-height: none; }
+  .player { position: sticky; top: 0; background: var(--panel); padding: 16px 0 12px; z-index: 2; }
+  audio { width: 100%; height: 44px; border-radius: 22px; }
+  details { border: 0; border-radius: 16px; background: var(--bg); padding: 14px 20px; margin: 4px 0 20px; }
+  summary { cursor: pointer; font-weight: 500; font-size: 14px; color: var(--accent); }
+  .summary-text { white-space: pre-wrap; margin-top: 10px; font-size: 14px; line-height: 22px; }
+  .speakers { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0 0 12px; }
+  .speakers .label { font-weight: 500; margin-inline-end: 6px; }
+  .copybar { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 14px; }
+  .seg { display: grid; grid-template-columns: 68px 1fr; gap: 12px; padding: 8px 12px; border-radius: 12px; font-size: 15px; line-height: 24px; transition: background .15s; }
+  .seg:hover { background: var(--hover); }
+  .seg.now { background: var(--accent-soft); color: var(--on-soft); }
+  .seg button { border: 0; background: none; color: var(--accent); font: 500 12px "Roboto Mono", ui-monospace, Consolas, Menlo, monospace; cursor: pointer; padding: 4px 0; text-align: start; align-self: start; }
+  .seg.now button { color: inherit; }
+  .seg .sp { color: var(--accent); font-size: 12px; font-weight: 500; letter-spacing: .5px; display: block; line-height: 18px; }
+  .seg.now .sp { color: inherit; }
+  .tablewrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: start; padding: 14px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { position: sticky; top: 0; z-index: 1; background: var(--panel); cursor: pointer; white-space: nowrap; user-select: none; color: var(--muted); font-size: 12px; font-weight: 500; letter-spacing: .5px; }
+  th.sorted { color: var(--accent); }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--muted); }
+  tbody tr { cursor: pointer; transition: background .15s; }
+  tbody tr:hover { background: var(--hover); }
+  td .chip { height: 24px; margin: 0 4px 4px 0; }
+  .empty { color: var(--muted); padding: 60px 20px; text-align: center; }
+  mark { background: var(--mark); color: inherit; border-radius: 3px; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    aside { max-height: 50vh; }
+    main { margin: 8px; border-radius: 20px; overflow: visible; }
+    .doc { padding: 20px 16px 60px; }
+    .doc h2 { font-size: 22px; line-height: 28px; }
+    .seg { grid-template-columns: 56px 1fr; padding: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="tools">
+      <h1><a href="#" id="home">Plaud Library</a></h1>
+      <input id="q" type="search" placeholder="Search titles, tags, dates and transcript text" autocomplete="off">
+      <div class="filters" id="filters">
+        <button data-f="all" class="on">All</button>
+        <button data-f="plaud">Plaud</button>
+        <button data-f="whisper">Local</button>
+        <button data-f="none">No transcript</button>
+      </div>
+      <div class="sortrow">
+        <select id="sort" aria-label="Sort by">
+          <option value="date:-1">Newest first</option>
+          <option value="date:1">Oldest first</option>
+          <option value="duration:-1">Longest audio</option>
+          <option value="duration:1">Shortest audio</option>
+          <option value="chars:-1">Longest transcript</option>
+          <option value="chars:1">Shortest transcript</option>
+          <option value="title:1">Title A–Z</option>
+          <option value="title:-1">Title Z–A</option>
+        </select>
+        <button id="allBtn" title="Back to the full list: clears the search, tags and filters">All files</button>
+      </div>
+      <div class="chips" id="tags"></div>
+      <div class="count" id="count"></div>
+    </div>
+    <div class="list" id="list"></div>
+  </aside>
+  <main><div class="doc" id="doc"></div></main>
+</div>
+
+<script src="data/index.js"></script>
+<script>
+(function () {
+  var ITEMS = window.PLAUD_INDEX || [];
+  var cache = {};      // id -> {segments, summary}
+  var waiting = {};    // id -> [callbacks]
+  var filter = "all", query = "", selected = null;
+  var sortKey = "date", sortDir = -1, activeTags = [], allTags = false;
+  var SORTS = {
+    date: function (it) { return it.start_utc || ""; },
+    duration: function (it) { return it.duration_ms || 0; },
+    chars: function (it) { return it.chars || 0; },
+    title: function (it) { return titleOf(it).toLowerCase(); }
+  };
+  function titleOf(it) { return it.title || it.name || it.base || ""; }
+  function visible() {
+    var key = SORTS[sortKey];
+    return ITEMS.filter(matches).sort(function (a, b) {
+      var x = key(a), y = key(b);
+      if (x !== y) return (x < y ? -1 : 1) * sortDir;
+      return (a.start_utc || "") < (b.start_utc || "") ? 1 : -1;
+    });
+  }
+  var $ = function (id) { return document.getElementById(id); };
+
+  // Transcripts live in data/t/<id>.js so the page works when opened straight from disk.
+  window.__plaudTranscript = function (id, data) {
+    cache[id] = data;
+    (waiting[id] || []).forEach(function (cb) { cb(data); });
+    delete waiting[id];
+  };
+  function load(id, cb) {
+    if (cache[id]) return cb(cache[id]);
+    if (waiting[id]) return waiting[id].push(cb);
+    waiting[id] = [cb];
+    var s = document.createElement("script");
+    s.src = "data/t/" + encodeURIComponent(id) + ".js";
+    s.onerror = function () { window.__plaudTranscript(id, { segments: [], summary: "", missing: true }); };
+    document.head.appendChild(s);
+  }
+
+  function el(tag, cls, text) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  }
+  function clock(ms) {
+    var t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), s = t % 60;
+    var mm = (m < 10 ? "0" : "") + m, ss = (s < 10 ? "0" : "") + s;
+    return h ? h + ":" + mm + ":" + ss : mm + ":" + ss;
+  }
+  function sourceOf(it) { return it.source === "plaud" || it.source === "whisper" ? it.source : "none"; }
+  var LABEL = { plaud: "Plaud", whisper: "Local", none: "No transcript" };
+
+  function textOf(it) {
+    var data = cache[it.id];
+    return data ? data.segments.map(function (s) { return s.t; }).join(" ").toLowerCase() : "";
+  }
+  function matches(it) {
+    if (filter !== "all" && sourceOf(it) !== filter) return false;
+    var tags = it.tags || [];
+    for (var i = 0; i < activeTags.length; i++) if (tags.indexOf(activeTags[i]) === -1) return false;
+    if (!query) return true;
+    var hay = ((it.title || "") + " " + (it.name || "") + " " + (it.start_local || "") + " " + (it.base || "") + " " + (it.tags || []).join(" ")).toLowerCase();
+    return hay.indexOf(query) !== -1 || textOf(it).indexOf(query) !== -1;
+  }
+
+  function renderList() {
+    var list = $("list"), shown = visible(), day = null;
+    renderTags();
+    list.textContent = "";
+    shown.forEach(function (it) {
+      var d = (it.start_local || "undated").slice(0, 10);
+      if (sortKey === "date" && d !== day) { day = d; list.appendChild(el("div", "day", d)); }
+      var b = el("button", "item" + (it.id === selected ? " sel" : ""));
+      var name = el("span", "name", titleOf(it));
+      name.dir = "auto";
+      var meta = el("span", "meta");
+      meta.appendChild(el("span", null, sortKey === "date" ? (it.start_local || "").slice(11) : (it.start_local || "")));
+      meta.appendChild(el("span", null, clock(it.duration_ms || 0)));
+      meta.appendChild(el("span", "tag " + sourceOf(it), LABEL[sourceOf(it)]));
+      b.appendChild(name); b.appendChild(meta);
+      b.onclick = function () { show(it.id); };
+      list.appendChild(b);
+    });
+    if (!shown.length) list.appendChild(el("p", "empty", ITEMS.length ? "Nothing matches." : "No recordings yet. Run ./run.sh"));
+    var hours = shown.reduce(function (a, it) { return a + (it.duration_ms || 0); }, 0) / 3600000;
+    $("count").textContent = shown.length + " of " + ITEMS.length + " recordings · " + hours.toFixed(1) + " h" +
+      (window.PLAUD_BUILT ? " · updated " + window.PLAUD_BUILT : "");
+  }
+
+  // The page state lives in the URL hash, so Back / Forward and copied links work.
+  var lastHash = null;
+  function stateHash() {
+    var p = [];
+    if (selected) p.push("id=" + encodeURIComponent(selected));
+    if (activeTags.length) p.push("tags=" + activeTags.map(encodeURIComponent).join(","));
+    if (query) p.push("q=" + encodeURIComponent(query));
+    if (filter !== "all") p.push("f=" + filter);
+    if (sortKey !== "date" || sortDir !== -1) p.push("sort=" + sortKey + ":" + sortDir);
+    return p.join("&");
+  }
+  function remember(replace) {
+    var h = stateHash();
+    if (h === location.hash.slice(1)) return;
+    lastHash = h;
+    if (replace) {
+      try { history.replaceState(null, "", location.pathname + location.search + (h ? "#" + h : "")); return; } catch (e) {}
+    }
+    location.hash = h;   // adds a history entry
+  }
+  function applyHash() {
+    var raw = location.hash.slice(1), st = {};
+    if (raw && raw.indexOf("=") === -1) st.id = raw;   // old links: #<recording id>
+    else raw.split("&").forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) st[kv.slice(0, i)] = kv.slice(i + 1); });
+    function dec(v) { try { return decodeURIComponent(v); } catch (e) { return v; } }
+    selected = st.id ? dec(st.id) : null;
+    activeTags = st.tags ? st.tags.split(",").map(dec) : [];
+    query = st.q ? dec(st.q).toLowerCase() : "";
+    filter = LABEL[st.f] ? st.f : "all";
+    var sort = (st.sort || "date:-1").split(":");
+    sortKey = SORTS[sort[0]] ? sort[0] : "date";
+    sortDir = sort[1] === "1" ? 1 : -1;
+    if ($("q").value.trim().toLowerCase() !== query) $("q").value = query;
+    $("sort").value = sortKey + ":" + sortDir;
+    Array.prototype.forEach.call($("filters").children, function (b) { b.classList.toggle("on", b.getAttribute("data-f") === filter); });
+    if (query) loadAll();
+    if (selected) draw(selected); else render();
+  }
+  window.addEventListener("hashchange", function () {
+    if (location.hash.slice(1) === lastHash) { lastHash = null; return; }   // our own change
+    lastHash = null;
+    applyHash();
+  });
+
+  function toggleTag(tag) {
+    var at = activeTags.indexOf(tag);
+    if (at === -1) activeTags.push(tag); else activeTags.splice(at, 1);
+    selected = null;   // show the filtered list of all files
+    remember();
+    render();
+  }
+  function clearTags() { activeTags = []; remember(); render(); }
+  function chip(tag, count) {
+    var c = el("button", "chip" + (activeTags.indexOf(tag) !== -1 ? " on" : ""), tag);
+    if (count != null) c.appendChild(el("small", null, count));
+    c.onclick = function (e) { e.stopPropagation(); toggleTag(tag); };
+    return c;
+  }
+  function renderTags() {
+    var box = $("tags"), counts = {};
+    ITEMS.forEach(function (it) { (it.tags || []).forEach(function (t) { counts[t] = (counts[t] || 0) + 1; }); });
+    var names = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a] || (a < b ? -1 : 1); });
+    box.textContent = "";
+    if (activeTags.length) {
+      var clear = el("button", "chip clear", "✕ clear tags");
+      clear.onclick = clearTags;
+      box.appendChild(clear);
+    }
+    var top = allTags ? names : names.filter(function (t, i) { return i < 14 || activeTags.indexOf(t) !== -1; });
+    top.forEach(function (t) { box.appendChild(chip(t, counts[t])); });
+    if (names.length > 14) {
+      var more = el("button", "chip", allTags ? "fewer" : "+" + (names.length - top.length) + " more");
+      more.onclick = function () { allTags = !allTags; renderTags(); };
+      box.appendChild(more);
+    }
+  }
+
+  // All recordings as a table; click a column heading to sort by it.
+  var COLUMNS = [["date", "Date"], ["title", "Title"], ["duration", "Duration"], ["chars", "Transcript"], [null, "Language"], [null, "Tags"]];
+  function renderTable() {
+    var doc = $("doc"), shown = visible();
+    doc.className = "doc wide";
+    doc.textContent = "";
+    var table = el("table"), head = el("tr");
+    COLUMNS.forEach(function (col) {
+      var th = el("th", col[0] === sortKey ? "sorted" : null, col[1] + (col[0] === sortKey ? (sortDir > 0 ? " ↑" : " ↓") : ""));
+      if (col[0]) th.onclick = function () {
+        sortDir = col[0] === sortKey ? -sortDir : (col[0] === "title" ? 1 : -1);
+        sortKey = col[0];
+        $("sort").value = sortKey + ":" + sortDir;
+        remember();
+        render();
+      }; else th.style.cursor = "default";
+      head.appendChild(th);
+    });
+    var thead = el("thead"); thead.appendChild(head); table.appendChild(thead);
+    var body = el("tbody");
+    shown.forEach(function (it) {
+      var tr = el("tr");
+      tr.appendChild(el("td", "num", it.start_local || ""));
+      var title = el("td", null, titleOf(it)); title.dir = "auto"; tr.appendChild(title);
+      tr.appendChild(el("td", "num", clock(it.duration_ms || 0)));
+      var tx = el("td", "num", (it.chars || 0).toLocaleString() + " chars · ");
+      tx.appendChild(el("span", "tag " + sourceOf(it), LABEL[sourceOf(it)]));
+      tr.appendChild(tx);
+      tr.appendChild(el("td", "num", it.language || ""));
+      var tags = el("td");
+      (it.tags || []).forEach(function (t) { tags.appendChild(chip(t)); });
+      tr.appendChild(tags);
+      tr.onclick = function () { show(it.id); };
+      body.appendChild(tr);
+    });
+    table.appendChild(body);
+    var wrap = el("div", "tablewrap"); wrap.appendChild(table); doc.appendChild(wrap);
+    if (!shown.length) doc.appendChild(el("p", "empty", "Nothing matches."));
+  }
+  function home() {   // all files, nothing filtered
+    selected = null; activeTags = []; query = ""; filter = "all";
+    $("q").value = "";
+    Array.prototype.forEach.call($("filters").children, function (b) { b.classList.toggle("on", b.getAttribute("data-f") === "all"); });
+    remember();
+    render();
+    $("doc").parentNode.scrollTop = 0;
+  }
+  function render() { renderList(); if (!selected) renderTable(); }
+
+  function highlight(node, text) {
+    if (!query) { node.textContent = text; return; }
+    var low = text.toLowerCase(), i = 0, at;
+    while ((at = low.indexOf(query, i)) !== -1) {
+      node.appendChild(document.createTextNode(text.slice(i, at)));
+      node.appendChild(el("mark", null, text.slice(at, at + query.length)));
+      i = at + query.length;
+    }
+    node.appendChild(document.createTextNode(text.slice(i)));
+  }
+
+  function plainText(segments, times) {
+    if (times) return segments.map(function (s) { return "[" + clock(s.s) + "] " + (s.sp ? s.sp + ": " : "") + s.t; }).join("\n");
+    var out = [], last = null;   // one paragraph per speaker turn
+    segments.forEach(function (s) {
+      if (out.length && (s.sp || "") === last) out[out.length - 1] += " " + s.t;
+      else out.push((s.sp ? s.sp + ": " : "") + s.t);
+      last = s.sp || "";
+    });
+    return out.join(s0(segments) ? "\n\n" : "\n");
+  }
+  function s0(segments) { return segments.some(function (s) { return s.sp; }); }
+  function copyText(text, done) {
+    // navigator.clipboard only exists on https or localhost; the viewer is often opened by IP.
+    function fallback() {
+      var ta = el("textarea"); ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+      document.body.appendChild(ta); ta.select();
+      var ok = false; try { ok = document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(ta); done(ok);
+    }
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+    else fallback();
+  }
+  function show(id) { selected = id; remember(); draw(id); }
+  function draw(id) {
+    selected = id;
+    var it = ITEMS.filter(function (x) { return x.id === id; })[0];
+    if (!it) { selected = null; render(); return; }
+    renderList();
+    var doc = $("doc");
+    doc.className = "doc";
+    doc.textContent = "";
+    var h = el("h2", null, titleOf(it)); h.dir = "auto";
+    doc.appendChild(h);
+    var facts = el("div", "facts");
+    facts.appendChild(el("span", null, it.start_local || "undated"));
+    facts.appendChild(el("span", null, clock(it.duration_ms || 0)));
+    facts.appendChild(el("span", "tag " + sourceOf(it), "Transcript: " + LABEL[sourceOf(it)] + (it.language ? " (" + it.language + ")" : "")));
+    if (it.audio) facts.appendChild(el("code", null, it.audio));
+    if (it.transcript) facts.appendChild(el("code", null, it.transcript));
+    doc.appendChild(facts);
+    if ((it.tags || []).length) {
+      var chips = el("div", "chips");
+      it.tags.forEach(function (t) { chips.appendChild(chip(t)); });
+      doc.appendChild(chips);
+    }
+
+    var audio = null;
+    if (it.audio) {
+      var wrap = el("div", "player");
+      audio = el("audio"); audio.controls = true; audio.preload = "none"; audio.src = it.audio;
+      wrap.appendChild(audio); doc.appendChild(wrap);
+    } else {
+      doc.appendChild(el("p", "empty", it.audio_note || "Audio not downloaded."));
+    }
+    if (it.error) doc.appendChild(el("p", "tag none", "Last sync error: " + it.error));
+    if (sourceOf(it) === "none") { doc.appendChild(el("p", "empty", "No transcript yet. Run ./run.sh to create one.")); return; }
+
+    var body = el("div"); doc.appendChild(body);
+    load(id, function (data) {
+      if (selected !== id) return;
+      if (data.summary) {
+        var det = el("details"); det.appendChild(el("summary", null, it.summary_by === "local" ? "Summary (generated locally)" : "Plaud summary"));
+        det.open = true;
+        var st = el("div", "summary-text", data.summary); st.dir = "auto";
+        det.appendChild(st); body.appendChild(det);
+      }
+      if (!data.segments.length) { body.appendChild(el("p", "empty", data.missing ? "Transcript file is missing." : "No speech detected.")); return; }
+      // Speakers: how many, each one's share of the talk time, click to show only theirs.
+      var talk = {}, order = [], total = 0, only = {};
+      data.segments.forEach(function (s) {
+        if (!s.sp) return;
+        if (!(s.sp in talk)) { talk[s.sp] = 0; order.push(s.sp); }
+        var ms = Math.max(s.e - s.s, 1); talk[s.sp] += ms; total += ms;
+      });
+      function picked(s) { return !Object.keys(only).length || only[s.sp || ""]; }
+      function shownSegs() { return data.segments.filter(picked); }
+      if (order.length) {
+        var who = el("div", "speakers");
+        who.appendChild(el("span", "label", order.length + (order.length === 1 ? " speaker" : " speakers")));
+        if (order.length > 1) order.forEach(function (sp) {
+          var c = el("button", "chip", sp);
+          c.appendChild(el("small", null, Math.round(100 * talk[sp] / total) + "%"));
+          c.title = "Show only " + sp + " (click again to show everyone)";
+          c.onclick = function () {
+            if (only[sp]) delete only[sp]; else only[sp] = true;
+            c.classList.toggle("on", !!only[sp]);
+            rows.forEach(function (r, i) { r.style.display = picked(data.segments[i]) ? "" : "none"; });
+          };
+          who.appendChild(c);
+        });
+        body.appendChild(who);
+      }
+      var bar = el("div", "copybar");
+      [["Copy transcript", false], ["Copy with times", true]].forEach(function (b) {
+        var btn = el("button", null, b[0]);
+        btn.title = b[1] ? "One line per timestamp" : "Plain text, grouped by speaker";
+        btn.onclick = function () {
+          var head = titleOf(it) + "\n" + (it.start_local || "") + "\n\n";
+          copyText(head + plainText(shownSegs(), b[1]), function (ok) {
+            btn.textContent = ok ? "Copied" : "Copy failed";
+            setTimeout(function () { btn.textContent = b[0]; }, 1500);
+          });
+        };
+        bar.appendChild(btn);
+      });
+      body.appendChild(bar);
+      var rows = data.segments.map(function (s) {
+        var row = el("div", "seg");
+        var t = el("button", null, clock(s.s));
+        t.title = "Play from here";
+        t.onclick = function () { if (audio) { audio.currentTime = s.s / 1000; audio.play(); } };
+        var txt = el("div"); txt.dir = "auto";
+        if (s.sp) txt.appendChild(el("span", "sp", s.sp));
+        var p = el("span"); highlight(p, s.t); txt.appendChild(p);
+        row.appendChild(t); row.appendChild(txt); body.appendChild(row);
+        return row;
+      });
+      if (audio) audio.ontimeupdate = function () {
+        var ms = audio.currentTime * 1000, cur = -1;
+        for (var i = 0; i < data.segments.length; i++) { if (data.segments[i].s <= ms) cur = i; else break; }
+        rows.forEach(function (r, i) { r.classList.toggle("now", i === cur); });
+      };
+      var first = body.querySelector("mark");
+      if (first) first.scrollIntoView({ block: "center" });
+    });
+  }
+
+  // Full-text search needs every transcript in memory; load them the first time the box is used.
+  var loadedAll = false;
+  function loadAll() {
+    if (loadedAll) return;
+    loadedAll = true;
+    var todo = ITEMS.filter(function (it) { return sourceOf(it) !== "none"; }), i = 0, timer = null;
+    (function next() {
+      if (i >= todo.length) return;
+      load(todo[i++].id, function () {
+        clearTimeout(timer);
+        timer = setTimeout(function () { if (query) render(); }, 150);
+        next();
+      });
+    })();
+  }
+
+  $("q").addEventListener("focus", loadAll);
+  $("q").addEventListener("input", function (e) { query = e.target.value.trim().toLowerCase(); loadAll(); remember(true); render(); });
+  $("sort").addEventListener("change", function (e) {
+    var parts = e.target.value.split(":");
+    sortKey = parts[0]; sortDir = +parts[1];
+    remember();
+    render();
+  });
+  $("allBtn").addEventListener("click", home);
+  $("home").addEventListener("click", function (e) { e.preventDefault(); home(); });
+  $("filters").addEventListener("click", function (e) {
+    var f = e.target.getAttribute("data-f");
+    if (!f) return;
+    filter = f;
+    Array.prototype.forEach.call(this.children, function (b) { b.classList.toggle("on", b === e.target); });
+    remember();
+    render();
+  });
+
+  applyHash();
+})();
+</script>
+</body>
+</html>

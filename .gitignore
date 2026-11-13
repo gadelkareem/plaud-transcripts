@@ -1,0 +1,6 @@
+# Your recordings and transcripts are private: never commit them.
+library/
+__pycache__/
+*.pyc
+.env
+.DS_Store

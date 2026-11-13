@@ -1,0 +1,14 @@
+name: plaud_transcripts
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - ffmpeg
+  - pip
+  - pip:
+      # Local Whisper on Apple Silicon (used for recordings Plaud has not transcribed).
+      - mlx-whisper
+      # Local LLM for titles and summaries of recordings Plaud has not summarised.
+      - mlx-lm
+      # MCP server so an AI assistant (any MCP client) can search the library.
+      - mcp
