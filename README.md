@@ -1,7 +1,57 @@
-# plaud_transcripts
+# Plaud transcripts
 
-Download every recording from your [Plaud](https://plaud.ai) account, save a
-transcript next to each one, and browse them in a local page.
+A private, searchable library of everything you record with a [Plaud](https://plaud.ai)
+device. It downloads every recording from your Plaud account, gives each one a transcript,
+title, summary, tags and speaker labels, and serves them in a local web page.
+
+Everything except the download runs on your own machine with local models: no recording,
+transcript or summary is sent to any AI service.
+
+![The library: every recording in a sortable table, with search, filters and tags](docs/library.png)
+
+![A recording: audio player, summary, speakers, and the transcript with timestamps](docs/transcript.png)
+
+<details>
+<summary>Dark mode</summary>
+
+![The same recording in dark mode](docs/transcript-dark.png)
+
+</details>
+
+The recordings in the screenshots are invented examples.
+
+## What you get
+
+- **Every recording, kept locally.** Audio and transcript are saved side by side under
+  `library/`, named by date and time.
+- **Transcripts for all of them.** Plaud's own transcript is used when a recording has
+  one; the rest are transcribed on your machine with Whisper. Mixed-language recordings
+  work: the language is detected for every 30 seconds.
+- **Titles, summaries and tags** written by a local LLM for recordings Plaud has not
+  summarised.
+- **Speaker labels** (`Speaker 1`, `Speaker 2`) on local transcripts (Docker route), like the ones Plaud
+  gives its own.
+- **A viewer page.** Sort, search across all transcript text, filter by tag or by
+  speaker, play from any timestamp, copy a transcript as text. Light and dark mode.
+- **An MCP server**, so an AI assistant on the same machine can search the library.
+- **Hands-off.** Run it hourly; finished recordings are skipped, so each run only handles
+  what is new.
+
+## Quick start
+
+| | Docker (Windows, Linux, any CPU) | macOS (Apple Silicon) |
+| --- | --- | --- |
+| Needs | Docker | conda (Miniconda or Miniforge), Node.js for the login |
+| Engines | `faster-whisper`, `llama.cpp`, `sherpa-onnx` | MLX Whisper, MLX LLM |
+| Start | `login.ps1`, then `docker compose up -d --build` | `./run.sh` |
+| Hourly runs | built in | `./schedule.sh install` |
+| Viewer | <http://127.0.0.1:8765> | `library/index.html` opens by itself |
+
+Details for each are in [Docker](#docker-always-on-pc) and [macOS](#macos) below. The
+first run downloads the models once (about 7 GB with Docker); after that it works offline
+apart from the calls to Plaud.
+
+## macOS
 
 ```
 ./run.sh
@@ -20,15 +70,12 @@ That one command:
 6. Tags every recording (3 to 5 tags from its title and summary, same local LLM).
    Recordings too short to summarise get a title that says so (`No summary · first words`
    or `No speech`).
-7. Builds and opens `library/index.html`: a table of all recordings that sorts by date,
-   title, duration or transcript length, tag chips to filter, search, the audio player
-   and the transcript (click a timestamp to play from there; two buttons copy it as text). It shows how
-   many speakers there are with each one's share; click a speaker to see only their lines.
+7. Builds and opens `library/index.html`, the viewer page shown above.
 
 Run it again any time: finished recordings are skipped, so it only handles new ones.
 Ctrl-C is safe.
 
-## Automatic runs (macOS)
+### Automatic runs
 
 ```
 ./schedule.sh install        # every 60 minutes while the Mac is awake, and at login
