@@ -57,6 +57,9 @@
   .item.sel .meta { color: inherit; opacity: .8; }
   .tag { font-size: 11px; font-weight: 500; letter-spacing: .5px; }
   .tag.plaud { color: var(--plaud); } .tag.whisper { color: var(--whisper); } .tag.none { color: var(--none); }
+  .tag.busy { color: var(--accent); }
+  .tag.busy::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor; margin-inline-end: 5px; vertical-align: 1px; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .25; } }
   .item.sel .tag { color: inherit; }
   main { overflow-y: auto; min-width: 0; background: var(--panel); border-radius: 24px; margin: 12px 12px 12px 4px; }
   .doc { max-width: 840px; margin: 0 auto; padding: 32px 32px 80px; }
@@ -140,6 +143,8 @@
   var ITEMS = window.PLAUD_INDEX || [];
   var cache = {};      // id -> {segments, summary}
   var waiting = {};    // id -> [callbacks]
+  var stale = {};      // id -> number; set when a recording changed, so its transcript is fetched again
+  var drawn = "";      // state of the open recording when it was last drawn
   var filter = "all", query = "", selected = null;
   var sortKey = "date", sortDir = -1, activeTags = [], allTags = false;
   var SORTS = {
@@ -170,7 +175,7 @@
     if (waiting[id]) return waiting[id].push(cb);
     waiting[id] = [cb];
     var s = document.createElement("script");
-    s.src = "data/t/" + encodeURIComponent(id) + ".js";
+    s.src = "data/t/" + encodeURIComponent(id) + ".js" + (stale[id] ? "?v=" + stale[id] : "");
     s.onerror = function () { window.__plaudTranscript(id, { segments: [], summary: "", missing: true }); };
     document.head.appendChild(s);
   }
@@ -188,6 +193,11 @@
   }
   function sourceOf(it) { return it.source === "plaud" || it.source === "whisper" ? it.source : "none"; }
   var LABEL = { plaud: "Plaud", whisper: "Local", none: "No transcript" };
+  // The transcript tag; a recording the sync is still working on says what is happening to it.
+  function statusTag(it, prefix) {
+    if (it.progress) return el("span", "tag busy", it.progress + "…");
+    return el("span", "tag " + sourceOf(it), (prefix || "") + LABEL[sourceOf(it)]);
+  }
 
   function textOf(it) {
     var data = cache[it.id];
@@ -215,7 +225,7 @@
       var meta = el("span", "meta");
       meta.appendChild(el("span", null, sortKey === "date" ? (it.start_local || "").slice(11) : (it.start_local || "")));
       meta.appendChild(el("span", null, clock(it.duration_ms || 0)));
-      meta.appendChild(el("span", "tag " + sourceOf(it), LABEL[sourceOf(it)]));
+      meta.appendChild(statusTag(it));
       b.appendChild(name); b.appendChild(meta);
       b.onclick = function () { show(it.id); };
       list.appendChild(b);
@@ -329,7 +339,7 @@
       var title = el("td", null, titleOf(it)); title.dir = "auto"; tr.appendChild(title);
       tr.appendChild(el("td", "num", clock(it.duration_ms || 0)));
       var tx = el("td", "num", (it.chars || 0).toLocaleString() + " chars · ");
-      tx.appendChild(el("span", "tag " + sourceOf(it), LABEL[sourceOf(it)]));
+      tx.appendChild(statusTag(it));
       tr.appendChild(tx);
       tr.appendChild(el("td", "num", it.language || ""));
       var tags = el("td");
@@ -390,6 +400,7 @@
     selected = id;
     var it = ITEMS.filter(function (x) { return x.id === id; })[0];
     if (!it) { selected = null; render(); return; }
+    drawn = stateOf(it);
     renderList();
     var doc = $("doc");
     doc.className = "doc";
@@ -399,7 +410,9 @@
     var facts = el("div", "facts");
     facts.appendChild(el("span", null, it.start_local || "undated"));
     facts.appendChild(el("span", null, clock(it.duration_ms || 0)));
-    facts.appendChild(el("span", "tag " + sourceOf(it), "Transcript: " + LABEL[sourceOf(it)] + (it.language ? " (" + it.language + ")" : "")));
+    if (it.progress) facts.appendChild(statusTag(it));
+    if (!it.progress || sourceOf(it) !== "none")
+      facts.appendChild(el("span", "tag " + sourceOf(it), "Transcript: " + LABEL[sourceOf(it)] + (it.language ? " (" + it.language + ")" : "")));
     if (it.audio) facts.appendChild(el("code", null, it.audio));
     if (it.transcript) facts.appendChild(el("code", null, it.transcript));
     doc.appendChild(facts);
@@ -418,7 +431,11 @@
       doc.appendChild(el("p", "empty", it.audio_note || "Audio not downloaded."));
     }
     if (it.error) doc.appendChild(el("p", "tag none", "Last sync error: " + it.error));
-    if (sourceOf(it) === "none") { doc.appendChild(el("p", "empty", "No transcript yet. Run ./run.sh to create one.")); return; }
+    if (sourceOf(it) === "none") {
+      doc.appendChild(el("p", "empty", it.progress ? "No transcript yet: " + it.progress.toLowerCase() + ". This page updates by itself."
+                                                   : "No transcript yet. The next sync run creates one."));
+      return;
+    }
 
     var body = el("div"); doc.appendChild(body);
     load(id, function (data) {
@@ -524,6 +541,38 @@
     remember();
     render();
   });
+
+  // The sync rewrites data/index.js while it works. Read it again every minute, so new
+  // recordings and the progress of unfinished ones show up without a reload.
+  function stateOf(it) {
+    return [it.progress, it.source, it.chars, it.title, it.has_summary, it.speakers, it.audio, (it.tags || []).join()].join("|");
+  }
+  function refresh() {
+    if (document.hidden) return;
+    var built = window.PLAUD_BUILT, s = document.createElement("script");
+    s.src = "data/index.js?t=" + Date.now();
+    s.onerror = function () { s.remove(); };
+    s.onload = function () {
+      s.remove();
+      var fresh = window.PLAUD_INDEX || [], old = {}, changed = window.PLAUD_BUILT !== built;
+      ITEMS.forEach(function (it) { old[it.id] = stateOf(it); });
+      fresh.forEach(function (it) {
+        if (old[it.id] === stateOf(it)) return;
+        changed = true;
+        delete cache[it.id];
+        stale[it.id] = Date.now();
+      });
+      ITEMS = fresh;
+      if (!selected) { if (changed) render(); return; }
+      if (changed) renderList();
+      var it = ITEMS.filter(function (x) { return x.id === selected; })[0];
+      var audio = document.querySelector("#doc audio");
+      // Not while it plays: drawing the page again would stop the audio.
+      if (it && stateOf(it) !== drawn && !(audio && !audio.paused)) draw(selected);
+    };
+    document.head.appendChild(s);
+  }
+  setInterval(refresh, 60000);
 
   applyHash();
 })();

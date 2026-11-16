@@ -362,9 +362,29 @@ def add_title_hints(manifest: dict) -> None:
         write_transcript(entry, data["segments"], data.get("summary") or "")
 
 
+_working: dict[str, str] = {}  # recording id -> what is being done to it right now
+
+
+def progress_of(entry: dict) -> str:
+    """What the viewer shows for a recording that is not finished ("" when it is)."""
+    if entry["id"] in _working:
+        return _working[entry["id"]]
+    if entry.get("source") in ("plaud", "whisper"):
+        return ""
+    return "Waiting for transcription" if entry.get("audio") else "Waiting for audio"
+
+
+def working(manifest: dict, entry: dict, what: str) -> None:
+    """Mark one recording as in progress and show that in the viewer at once."""
+    _working[entry["id"]] = what
+    build_viewer(manifest)
+
+
 def build_viewer(manifest: dict) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     rows = sorted(manifest.values(), key=lambda e: e.get("start_utc") or "", reverse=True)
+    # `progress` is only for the viewer; it is never saved in the manifest.
+    rows = [{**e, "progress": progress_of(e)} if progress_of(e) else e for e in rows]
     (DATA_DIR / "index.js").write_text(
         "window.PLAUD_INDEX = " + json.dumps(rows, ensure_ascii=False) + ";\n"
         f"window.PLAUD_BUILT = {json.dumps(datetime.now().astimezone().strftime('%Y-%m-%d %H:%M'))};\n",
@@ -659,6 +679,8 @@ def main() -> int:
             if settled and entry.get("audio") and (LIBRARY / entry["audio"]).exists():
                 continue
             log(f"[{i}/{len(recordings)}] {entry['base']}")
+            if entry.get("source") not in ("plaud", "whisper"):
+                working(manifest, entry, "Downloading")
             try:
                 sync_one(rec, entry, args)
                 entry.pop("error", None)
@@ -668,6 +690,7 @@ def main() -> int:
                 entry["error"] = str(err)
                 failures.append((entry["base"], str(err)))
                 log(f"    failed: {err}")
+            _working.pop(entry["id"], None)
             save_manifest(manifest)
         build_viewer(manifest)
 
@@ -710,6 +733,7 @@ def main() -> int:
         def summarise(entry: dict) -> None:
             import summarize
 
+            working(manifest, entry, "Writing summary")
             try:
                 data = read_transcript(entry)
                 text = "\n".join(seg["t"] for seg in data["segments"])
@@ -726,6 +750,7 @@ def main() -> int:
                 entry["error"] = f"summary failed: {err}"
                 failures.append((entry["base"], str(err)))
                 log(f"    summary failed: {err}")
+            _working.pop(entry["id"], None)
             save_manifest(manifest)
 
         # Pass 2: titles and summaries for finished transcripts Plaud has not summarised.
@@ -751,6 +776,7 @@ def main() -> int:
         for i, entry in enumerate(todo, 1):
             log(f"[{i}/{len(todo)}] {entry['base']} ({fmt_clock(entry.get('duration_ms') or 0)})")
             started = time.time()
+            working(manifest, entry, "Transcribing")
             try:
                 audio = load_samples(LIBRARY / entry["audio"])
                 if args.language:
@@ -776,6 +802,7 @@ def main() -> int:
                     write_transcript(entry, segments, "")  # saved before the slower speaker pass
                     log(f"    done in {time.time() - started:.0f}s")
                     if needs_speakers(entry):
+                        working(manifest, entry, "Adding speaker labels")
                         add_speakers(entry, audio, segments)
                         write_transcript(entry, segments, "")
                 entry.pop("error", None)
@@ -784,6 +811,7 @@ def main() -> int:
                 entry["error"] = f"local transcription failed: {err}"
                 failures.append((entry["base"], str(err)))
                 log(f"    failed: {err}")
+            _working.pop(entry["id"], None)
             save_manifest(manifest)
             if needs_summary(entry) and not entry.get("error"):
                 summarise(entry)
@@ -797,6 +825,7 @@ def main() -> int:
             log(f"\nAdding speaker labels to {len(todo)} local transcript(s) ({hours:.1f} h of audio).\n")
         for i, entry in enumerate(todo, 1):
             log(f"[{i}/{len(todo)}] {entry['base']} ({fmt_clock(entry.get('duration_ms') or 0)})")
+            working(manifest, entry, "Adding speaker labels")
             try:
                 data = read_transcript(entry)
                 audio = load_samples(LIBRARY / entry["audio"]) if data["segments"] else None
@@ -806,6 +835,7 @@ def main() -> int:
             except Exception as err:
                 failures.append((entry["base"], f"speaker labels failed: {err}"))
                 log(f"    failed: {err}")
+            _working.pop(entry["id"], None)
             save_manifest(manifest)
             if i % 5 == 0:
                 build_viewer(manifest)

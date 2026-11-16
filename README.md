@@ -32,7 +32,9 @@ The recordings in the screenshots are invented examples.
 - **Speaker labels** (`Speaker 1`, `Speaker 2`) on local transcripts (Docker route), like the ones Plaud
   gives its own.
 - **A viewer page.** Sort, search across all transcript text, filter by tag or by
-  speaker, play from any timestamp, copy a transcript as text. Light and dark mode.
+  speaker, play from any timestamp, copy a transcript as text. Recordings still being
+  downloaded, transcribed or summarised are listed with their status, and the page
+  refreshes itself. Light and dark mode.
 - **An MCP server**, so an AI assistant on the same machine can search the library.
 - **Hands-off.** Run it hourly; finished recordings are skipped, so each run only handles
   what is new.
