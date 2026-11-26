@@ -398,6 +398,7 @@ _whisper = None
 WHISPER_VERSION = 2  # bump when local transcription changes enough to redo old transcripts
 WINDOW_SECONDS = 30
 CONFIDENT = 0.6      # a window's language counts only above this probability
+MAX_PIECE_WINDOWS = 60  # longest stretch handed to Whisper in one go (30 minutes)
 
 
 def _load_whisper():
@@ -543,7 +544,9 @@ def whisper_segments(audio, model: str, plan: list[str]) -> list[dict]:
     rate = 16000
     stretches: list[list] = []  # [language, first window, last window + 1]
     for i, language in enumerate(plan):
-        if stretches and stretches[-1][0] == language:
+        # A stretch is also cut at MAX_PIECE_WINDOWS: Whisper prepares the whole piece in
+        # memory at once, and hours of audio in one piece need more than 13 GB.
+        if stretches and stretches[-1][0] == language and i - stretches[-1][1] < MAX_PIECE_WINDOWS:
             stretches[-1][2] = i + 1
         else:
             stretches.append([language, i, i + 1])
